@@ -1,0 +1,26 @@
+# === The Delphi Crucible - Backend Dependencies ===
+
+# Web framework
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
+
+# Financial data
+yfinance==0.2.54
+
+# Redis for session state
+redis[hiredis]==5.3.0
+
+# HTTP client (for Band API + LLM APIs)
+httpx==0.28.1
+
+# SSE streaming
+sse-starlette==2.2.1
+
+# Environment variables
+python-dotenv==1.1.0
+
+# Data handling
+pandas==2.2.3
+
+# CORS
+# (included in fastapi/starlette)
