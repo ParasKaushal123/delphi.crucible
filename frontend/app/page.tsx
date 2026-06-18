@@ -7,6 +7,7 @@ import DebateRing from "./components/DebateRing";
 import MemoPanel from "./components/MemoPanel";
 import UploadZone from "./components/UploadZone";
 import { useSSE } from "./hooks/useSSE";
+import { toast, Toaster } from "react-hot-toast";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -107,6 +108,16 @@ export default function HomePage() {
           if (newPhase === "MEMO_DELIVERED" || newPhase === "ERROR") {
             setIsRunning(false);
           }
+          if (newPhase === "MEMO_DELIVERED" && data.is_emergency) {
+            toast.error("⚠️ AUTONOMOUS ALERT: NVDA position changed. Click to view.", {
+              duration: 8000,
+              style: {
+                background: '#ff4b4b',
+                color: '#fff',
+                fontWeight: 'bold',
+              },
+            });
+          }
           break;
         }
 
@@ -152,6 +163,26 @@ export default function HomePage() {
           content: `Error: Failed to start analysis pipeline. Make sure the backend is running.`,
         },
       ]);
+    }
+  };
+
+  const handleSimulateCrash = async () => {
+    if (isRunning) return;
+    setIsRunning(true);
+    setPhase("IDLE");
+    setMemo("");
+    setMainMessages([]);
+    setDataCaveMessages([]);
+    setBullMessages([]);
+    setBearMessages([]);
+    try {
+      const resp = await fetch(`${API_BASE}/api/simulate-market-tick`, {
+        method: "POST",
+      });
+      if (!resp.ok) throw new Error("Failed to simulate crash");
+    } catch (e) {
+      setIsRunning(false);
+      toast.error("Failed to trigger simulation");
     }
   };
 
@@ -224,6 +255,7 @@ export default function HomePage() {
   return (
     <div className="app-container">
       {/* ─── Header ─── */}
+      <Toaster position="top-right" />
       <header className="header">
         <div className="header-brand">
           <div className="header-logo">TDC</div>
@@ -234,6 +266,20 @@ export default function HomePage() {
         </div>
 
         <div className="header-status">
+          <div className="agent-indicators" style={{ display: 'flex', gap: '12px', marginRight: '24px', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', color: '#fff', fontWeight: 500 }}>PM {connected ? '🟢' : '⚪'}</span>
+            <span style={{ fontSize: '12px', color: '#fff', fontWeight: 500 }}>Quant {connected ? '🟢' : '⚪'}</span>
+            <span style={{ fontSize: '12px', color: '#fff', fontWeight: 500 }}>Bull {connected ? '🟢' : '⚪'}</span>
+            <span style={{ fontSize: '12px', color: '#fff', fontWeight: 500 }}>Bear {connected ? '🟢' : '⚪'}</span>
+          </div>
+          <button 
+            className="simulate-crash-btn" 
+            onClick={handleSimulateCrash}
+            disabled={isRunning}
+            style={{ backgroundColor: '#ff4b4b', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', marginRight: '16px', fontWeight: 'bold' }}
+          >
+            🚨 Simulate Market Crash
+          </button>
           <div className="status-badge">
             <span
               className={`status-dot ${

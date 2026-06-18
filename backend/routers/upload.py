@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from tools.pdf_tool import extract_pdf_text, get_pdf_metadata
 from agents.pm_agent import run_full_pipeline
 from config import settings
+from state.session_store import Phase
 
 router = APIRouter(prefix="/api", tags=["upload"])
 
@@ -70,18 +71,50 @@ async def analyze_pdf_upload(
         or "Unknown Company"
     )
 
-    # ── Fire pipeline in background ───────────────────────────
+    # ── Fire pipeline via Band SDK ───────────────────────────
     session_store = request.app.state.session_store
-
-    asyncio.create_task(
-        run_full_pipeline(
-            ticker="PDF",
-            session_store=session_store,
-            band_key="",
-            extracted_text=extracted_text,
-            company_name=name,
-        )
+    import uuid
+    from band_api.client import get_pm_client
+    
+    session_id = str(uuid.uuid4())
+    session = await session_store.create_session(
+        session_id=session_id,
+        ticker="PDF",
+        main_room_id="",
     )
+    session.extracted_text = extracted_text
+    session.company_name = name
+    await session_store.update_session(session)
+
+    pm_client = get_pm_client()
+    try:
+        chat_resp = await pm_client.create_chat_room()
+        chat_id = chat_resp.get("data", {}).get("id") or chat_resp.get("id")
+        
+        session.main_room_id = chat_id
+        session.phase = Phase.ROLL_CALL
+        await session_store.update_session(session)
+        
+        # Add all agents to the main room for roll call
+        await pm_client.add_participant(chat_id, settings.QUANT_AGENT_ID)
+        await pm_client.add_participant(chat_id, settings.BULL_AGENT_ID)
+        await pm_client.add_participant(chat_id, settings.BEAR_AGENT_ID)
+
+        # Wait for agents to sync history so this arrives as a live message
+        await asyncio.sleep(2)
+
+        # Trigger Roll Call
+        await pm_client.send_message(
+            chat_id=chat_id,
+            content=f"@{settings.QUANT_AGENT_NAME} @{settings.BULL_AGENT_NAME} @{settings.BEAR_AGENT_NAME} Roll call! Please confirm your systems are online.",
+            mentions=[
+                {"id": settings.QUANT_AGENT_ID, "handle": settings.QUANT_AGENT_NAME},
+                {"id": settings.BULL_AGENT_ID, "handle": settings.BULL_AGENT_NAME},
+                {"id": settings.BEAR_AGENT_ID, "handle": settings.BEAR_AGENT_NAME},
+            ]
+        )
+    finally:
+        await pm_client.close()
 
     return JSONResponse({
         "status": "started",

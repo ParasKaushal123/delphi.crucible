@@ -16,6 +16,7 @@ from config import settings
 
 class Phase(str, Enum):
     IDLE = "IDLE"
+    ROLL_CALL = "ROLL_CALL"
     DATA_CAVE_OPEN = "DATA_CAVE_OPEN"
     DATA_CAVE_COMPLETE = "DATA_CAVE_COMPLETE"
     DEBATE_RING_OPEN = "DEBATE_RING_OPEN"
@@ -43,6 +44,10 @@ class SessionState:
         created_at: str = "",
         updated_at: str = "",
         error: str = "",
+        is_emergency: bool = False,
+        extracted_text: str = "",
+        company_name: str = "",
+        agents_ready: list = None,
     ):
         self.session_id = session_id
         self.ticker = ticker
@@ -58,6 +63,10 @@ class SessionState:
         self.created_at = created_at or datetime.utcnow().isoformat()
         self.updated_at = updated_at or datetime.utcnow().isoformat()
         self.error = error
+        self.is_emergency = is_emergency
+        self.extracted_text = extracted_text
+        self.company_name = company_name
+        self.agents_ready = agents_ready or []
 
     def to_dict(self) -> dict:
         return {
@@ -75,6 +84,10 @@ class SessionState:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "error": self.error,
+            "is_emergency": self.is_emergency,
+            "extracted_text": self.extracted_text,
+            "company_name": self.company_name,
+            "agents_ready": self.agents_ready,
         }
 
     @classmethod
@@ -189,9 +202,10 @@ class SessionStore:
             "memo": memo_content,
         })
 
-    async def publish_phase_change(self, session_id: str, phase: str, detail: str = ""):
+    async def publish_phase_change(self, session_id: str, phase: str, detail: str = "", is_emergency: bool = False):
         """Publish phase change event for the frontend status indicators."""
         await self._publish_event(session_id, "phase_change", {
             "phase": phase,
             "detail": detail,
+            "is_emergency": is_emergency,
         })

@@ -38,14 +38,23 @@ Format:
 Be concise. No fluff. Only facts from the data above."""
 
 
-def pm_final_memo_prompt(ticker: str, quant_summary: str, bull_arg: str, bear_arg: str) -> str:
+def pm_final_memo_prompt(ticker: str, quant_summary: str, bull_arg: str, bear_arg: str, user_profile: dict = None) -> str:
+    user_context = ""
+    if user_profile:
+        user_context = f"""
+─── USER PROFILE ───
+Capital: ${user_profile.get('capital', 0):,.2f}
+Risk Tolerance: {user_profile.get('risk_tolerance')}
+Current Portfolio: {user_profile.get('portfolio')}
+"""
+
     return f"""You are writing the FINAL Investment Memo for ${ticker}.
 
 You have:
 1. A clean data summary from the Quant team
 2. A Bull Case from the optimist
 3. A Bear Case from the skeptic
-
+{user_context}
 ─── QUANT SUMMARY ───
 {quant_summary}
 
@@ -62,6 +71,10 @@ Write the final memo in this EXACT format:
 
 ### 📊 Recommendation: [STRONG BUY / BUY / HOLD / SELL / STRONG SELL]
 [1-2 sentence executive summary of your call]
+
+### 💰 Recommended Trade Size
+[Provide specific trade sizing recommendation based on the User Profile (Capital & Risk Tolerance)]
+
 
 ### 🟢 Bull Case
 [Synthesize the bull argument — 3-4 key points with data citations]
