@@ -10,13 +10,13 @@
 📈 Ticker or 📄 10-K PDF
         │
         ▼
-  ⚗️ Data Cave ──→ Quant Agent extracts financials
+  ⚗️ Data Cave ──→ Quant Agent extracts financials & breaking news (Live Web Search)
         │
         ▼
-  ⚔️ Debate Ring ──→ Bull + Bear argue in parallel
+  ⚔️ Debate Ring ──→ Bull + Bear argue in parallel (Interactive PM & Debate Pause)
         │
         ▼
-  📄 Investment Memo ──→ PM synthesizes the final call
+  📄 Investment Memo ──→ PM synthesizes the final call (Saved to Database)
 ```
 
 ## Stack
