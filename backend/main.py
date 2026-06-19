@@ -95,10 +95,13 @@ async def lifespan(app: FastAPI):
                     for t in tickers_to_check:
                         if t == "MOCK":
                             import time
-                            if not hasattr(app.state, "mock_start_time"):
-                                app.state.mock_start_time = time.time()
-                            elapsed = time.time() - app.state.mock_start_time
-                            current_price = 100.0 + (elapsed / 12.0) # Increases $1 every 12 seconds, reaches +$10 deviation in 2 mins (120s).
+                            cycle = 420  # 7 minutes
+                            elapsed = time.time() % cycle
+                            if elapsed < 210:
+                                current_price = 70.0 + (50.0 * (elapsed / 210.0))
+                            else:
+                                current_price = 120.0 - (50.0 * ((elapsed - 210) / 210.0))
+                            current_price = round(current_price, 2)
                             print(f"[DEBUG] MOCK Price: {current_price:.2f}")
                         else:
                             res = await client.get(f"https://query2.finance.yahoo.com/v8/finance/chart/{t}", headers={'User-Agent': 'Mozilla/5.0'}, timeout=10.0)
@@ -198,11 +201,17 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 print(f"[Monitor Error] {e}")
 
+    async def safe_run_agent(agent_obj, name):
+        try:
+            await agent_obj.run()
+        except Exception as e:
+            print(f"[FATAL] {name} Agent WebSocket crashed: {e}")
+
     app.state.agent_tasks = [
-        asyncio.create_task(pm_agent.run()),
-        asyncio.create_task(quant_agent.run()),
-        asyncio.create_task(bull_agent.run()),
-        asyncio.create_task(bear_agent.run()),
+        asyncio.create_task(safe_run_agent(pm_agent, "PM")),
+        asyncio.create_task(safe_run_agent(quant_agent, "Quant")),
+        asyncio.create_task(safe_run_agent(bull_agent, "Bull")),
+        asyncio.create_task(safe_run_agent(bear_agent, "Bear")),
         asyncio.create_task(threshold_monitor(store))
     ]
     print("[OK] Band SDK Agents started (WebSocket connections established)")

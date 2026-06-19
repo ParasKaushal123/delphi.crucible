@@ -30,9 +30,14 @@ def fetch_financial_data(ticker: str) -> dict:
 
 def _fetch(ticker: str) -> dict:
     if ticker.upper() == "MOCK":
-        # Alternate current_price between 120 and 70 every 10 minutes (600 seconds)
-        is_high = (int(time.time() / 600) % 2) == 0
-        current_price = 120.0 if is_high else 70.0
+        import time
+        cycle = 420  # 7 minutes
+        elapsed = time.time() % cycle
+        if elapsed < 210:
+            current_price = 70.0 + (50.0 * (elapsed / 210.0))
+        else:
+            current_price = 120.0 - (50.0 * ((elapsed - 210) / 210.0))
+        current_price = round(current_price, 2)
 
         return {
             "profile": {
