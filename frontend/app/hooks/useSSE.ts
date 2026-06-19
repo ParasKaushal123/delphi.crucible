@@ -5,7 +5,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 interface SSEEvent {
   session_id: string;
   type: string;
-  data: Record<string, unknown>;
+  data: any;
   timestamp: string;
 }
 
