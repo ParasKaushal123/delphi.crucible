@@ -106,7 +106,14 @@ class PMAgentAdapter(BaseBenchAdapter):
                 
                 # Fetch profile
                 raw_profile = await self.store._redis.get("user_profile:demo_user")
-                user_profile_data = json.loads(raw_profile) if raw_profile else None
+                if raw_profile:
+                    user_profile_data = json.loads(raw_profile)
+                else:
+                    user_profile_data = {
+                        "capital": 250000.00,
+                        "risk_tolerance": "Aggressive",
+                        "portfolio": "Mostly tech equities and cash"
+                    }
                 
                 try:
                     final_memo = await call_llm(
