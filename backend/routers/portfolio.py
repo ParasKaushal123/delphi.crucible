@@ -191,18 +191,15 @@ async def get_portfolio_chart(request: Request):
                     import time
                     now = int(time.time())
                     
-                    # Compute the live current price based on the backend state
-                    current_price = 100.0
-                    start_time = getattr(request.app.state, "mock_start_time", None)
-                    if start_time:
-                        elapsed = time.time() - start_time
-                        current_price = 100.0 + (elapsed / 12.0)
-                        
+                    cycle = 420
                     timestamps = [now - (30-i)*86400 for i in range(30)]
-                    # Curve slowly upwards to meet current_price
-                    diff = current_price - 100.0
-                    step = diff / 29.0 if diff > 0 else 0
-                    closes = [100.0 + (i * step) for i in range(30)]
+                    closes = []
+                    for ts in timestamps:
+                        elapsed = ts % cycle
+                        if elapsed < 210:
+                            closes.append(70.0 + (50.0 * (elapsed / 210.0)))
+                        else:
+                            closes.append(120.0 - (50.0 * ((elapsed - 210) / 210.0)))
                     
                     return t, {
                         "chart": {
@@ -289,16 +286,15 @@ async def get_individual_stock_chart(ticker: str, request: Request):
             import time
             now = int(time.time())
             
-            current_price = 100.0
-            start_time = getattr(request.app.state, "mock_start_time", None)
-            if start_time:
-                elapsed = time.time() - start_time
-                current_price = 100.0 + (elapsed / 12.0)
-            
+            cycle = 420
             timestamps = [now - (30-i)*86400 for i in range(30)]
-            diff = current_price - 100.0
-            step = diff / 29.0 if diff > 0 else 0
-            closes = [100.0 + (i * step) for i in range(30)]
+            closes = []
+            for ts in timestamps:
+                elapsed = ts % cycle
+                if elapsed < 210:
+                    closes.append(70.0 + (50.0 * (elapsed / 210.0)))
+                else:
+                    closes.append(120.0 - (50.0 * ((elapsed - 210) / 210.0)))
             
             chart_data = []
             for i in range(len(timestamps)):
