@@ -38,7 +38,7 @@ export default function DebateRing({
       <div className="room-panel-header">
         <div className="room-panel-title">
           <span className="room-icon">⚔️</span>
-          Debate Ring
+          <span className="eyebrow-label">Debate Ring</span>
         </div>
         <div className="room-panel-status">
           <span className={`status-indicator ${status}`} />

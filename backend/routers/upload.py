@@ -95,6 +95,13 @@ async def analyze_pdf_upload(
         session.phase = Phase.ROLL_CALL
         await session_store.update_session(session)
         
+        await session_store.publish_room_message(
+            session_id=session_id,
+            room_name="Main Room",
+            agent="pm-agent",
+            content=f"PDF uploaded. Extracting data for **{name}**... Please wait while the agents join.",
+        )
+        
         # Add all agents to the main room for roll call
         await pm_client.add_participant(chat_id, settings.QUANT_AGENT_ID)
         await pm_client.add_participant(chat_id, settings.BULL_AGENT_ID)
@@ -118,6 +125,7 @@ async def analyze_pdf_upload(
 
     return JSONResponse({
         "status": "started",
+        "session_id": session_id,
         "company_name": name,
         "pages_extracted": page_count,
         "characters_extracted": len(extracted_text),

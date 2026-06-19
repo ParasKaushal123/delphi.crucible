@@ -4,8 +4,8 @@ Ticker search + price lookup endpoints.
 
 import json
 import pathlib
+import requests
 from fastapi import APIRouter
-import yfinance as yf
 
 router = APIRouter()
 
@@ -55,18 +55,19 @@ def search_tickers(q: str = "", limit: int = 10) -> list[dict]:
 @router.get("/api/tickers/{symbol}/price")
 def get_ticker_price(symbol: str) -> dict:
     """
-    Fetch current price for a ticker via yfinance.
-    Fast — uses fast_info for minimal API calls.
+    Fetch current price for a ticker via Yahoo API directly.
     """
     try:
-        stock = yf.Ticker(symbol.upper())
-        info = stock.info
+        res = requests.get(f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol.upper()}", headers={'User-Agent': 'Mozilla/5.0'})
+        if res.status_code != 200:
+            raise ValueError("Rate limited or not found")
+        data = res.json()["chart"]["result"][0]["meta"]
         return {
             "ticker": symbol.upper(),
-            "price": info.get("currentPrice") or info.get("regularMarketPrice"),
-            "change_pct": round((info.get("regularMarketChangePercent") or 0), 2),
-            "market_cap_B": round((info.get("marketCap") or 0) / 1e9, 2),
-            "name": info.get("longName", symbol.upper()),
+            "price": data.get("regularMarketPrice"),
+            "change_pct": 0.0, # Not easily available in basic chart meta without previous close
+            "market_cap_B": 0.0, # Not in basic chart meta
+            "name": symbol.upper(),
         }
     except Exception as e:
         return {"ticker": symbol.upper(), "error": str(e)}

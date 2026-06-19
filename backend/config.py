@@ -17,12 +17,12 @@ class Settings:
     BAND_BEAR_BOT_TOKEN: str = os.getenv("BAND_BEAR_BOT_TOKEN", "")
 
     # --- Agent UUIDs ---
-    BEAR_AGENT_ID: str = "a95d3851-7837-486c-975f-cc3bf62725d7"
-    WATCHER_AGENT_ID: str = "9f9a46c6-fd68-413b-b3e4-7e5bbd91f2ca"
-    BULL_AGENT_ID: str = "0b798aec-9962-44b6-88cd-031b463305d4"
-    PM_AGENT_ID: str = "80e3bfa5-6653-487f-a160-3c12cc3d1d5b"
-    QUANT_AGENT_ID: str = "4ba0a643-3d28-4f2b-8f7d-dd4acefd637e"
-    HUMAN_OWNER_ID: str = "c1453114-1160-4f97-9a4d-edb04e5d0905"
+    BEAR_AGENT_ID: str = os.getenv("BEAR_AGENT_ID", "a95d3851-7837-486c-975f-cc3bf62725d7")
+    WATCHER_AGENT_ID: str = os.getenv("WATCHER_AGENT_ID", "9f9a46c6-fd68-413b-b3e4-7e5bbd91f2ca")
+    BULL_AGENT_ID: str = os.getenv("BULL_AGENT_ID", "0b798aec-9962-44b6-88cd-031b463305d4")
+    PM_AGENT_ID: str = os.getenv("PM_AGENT_ID", "80e3bfa5-6653-487f-a160-3c12cc3d1d5b")
+    QUANT_AGENT_ID: str = os.getenv("QUANT_AGENT_ID", "4ba0a643-3d28-4f2b-8f7d-dd4acefd637e")
+    HUMAN_OWNER_ID: str = os.getenv("HUMAN_OWNER_ID", "c1453114-1160-4f97-9a4d-edb04e5d0905")
 
     # --- AI/ML API (PM, Bull, Bear) ---
     AIML_API_KEY: str = os.getenv("AIML_API_KEY", "")
@@ -43,10 +43,10 @@ class Settings:
     WEBHOOK_BASE_URL: str = os.getenv("WEBHOOK_BASE_URL", "http://localhost:8000")
 
     # --- Agent Names / Handles ---
-    PM_AGENT_NAME: str = "yashwanthreddy0615/pm-agent"
-    QUANT_AGENT_NAME: str = "yashwanthreddy0615/quant-agent"
-    BULL_AGENT_NAME: str = "yashwanthreddy0615/bull-agent"
-    BEAR_AGENT_NAME: str = "yashwanthreddy0615/bear-agent"
+    PM_AGENT_NAME: str = os.getenv("PM_AGENT_NAME", "yashwanthreddy0615/pm-agent")
+    QUANT_AGENT_NAME: str = os.getenv("QUANT_AGENT_NAME", "yashwanthreddy0615/quant-agent")
+    BULL_AGENT_NAME: str = os.getenv("BULL_AGENT_NAME", "yashwanthreddy0615/bull-agent")
+    BEAR_AGENT_NAME: str = os.getenv("BEAR_AGENT_NAME", "yashwanthreddy0615/bear-agent")
 
 
 settings = Settings()

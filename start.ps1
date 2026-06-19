@@ -1,5 +1,4 @@
-Write-Host "Starting Redis (via docker-compose)..." -ForegroundColor Green
-docker-compose up -d redis
+# Redis is already running natively on this machine
 
 Write-Host "Starting Backend..." -ForegroundColor Green
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd backend; `$env:PYTHONUTF8=1; uvicorn main:app --port 8000"

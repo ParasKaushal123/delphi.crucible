@@ -68,6 +68,13 @@ async def trigger_analysis(req: AnalysisRequest, request: Request):
         session.phase = Phase.ROLL_CALL
         await store.update_session(session)
 
+        await store.publish_room_message(
+            session_id=session_id,
+            room_name="Main Room",
+            agent="pm-agent",
+            content=f"Ticker selected. Extracting data for **${ticker}**... Please wait while the agents join.",
+        )
+
         # Add all agents to the main room for roll call
         await pm_client.add_participant(chat_id, settings.QUANT_AGENT_ID)
         await pm_client.add_participant(chat_id, settings.BULL_AGENT_ID)

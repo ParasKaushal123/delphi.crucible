@@ -8,9 +8,11 @@ from typing import Dict
 class Position(BaseModel):
     buy_price: float
     shares: int
+    threshold: str = ""
 
 class UserProfile(BaseModel):
     user_id: str
-    capital: float
-    risk_tolerance: str
-    portfolio: Dict[str, Position]
+    income: float = 0.0
+    risk_tolerance: str = "moderate"
+    experience: str = "beginner"
+    portfolio: Dict[str, Position] = {}

@@ -66,7 +66,7 @@ export default function RoomPanel({
       <div className="room-panel-header">
         <div className="room-panel-title">
           <span className="room-icon">{roomIcon}</span>
-          {roomName}
+          <span className="eyebrow-label">{roomName}</span>
         </div>
         <div className="room-panel-status">
           <span className={`status-indicator ${status}`} />

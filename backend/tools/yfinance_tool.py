@@ -56,6 +56,66 @@ def fetch_financial_data(ticker: str) -> dict:
 
 def _fetch(ticker: str) -> dict:
     """Single fetch attempt — called by fetch_financial_data with retry wrapper."""
+    if ticker.upper() == "MOCK":
+        return {
+            "profile": {
+                "ticker": "MOCK",
+                "name": "Mock Corporation",
+                "sector": "Technology",
+                "industry": "Software",
+                "market_cap_B": 1500.5,
+                "employees": 10000,
+                "description": "Mock Corporation is a simulated entity used for testing the trading threshold and analysis pipeline.",
+            },
+            "valuation": {
+                "trailing_pe": 25.4,
+                "forward_pe": 22.1,
+                "price_to_sales_ttm": 8.5,
+                "price_to_book": 12.3,
+                "ev_to_ebitda": 18.2,
+                "ev_to_revenue": 9.1,
+                "peg_ratio": 1.5,
+                "beta": 1.2,
+                "52w_high": 150.0,
+                "52w_low": 80.0,
+                "current_price": 115.0,
+            },
+            "income_statement": {
+                "2023": {"revenue_B": 100.0, "gross_profit_B": 60.0, "ebit_B": 30.0, "net_income_B": 25.0},
+                "2022": {"revenue_B": 85.0, "gross_profit_B": 50.0, "ebit_B": 24.0, "net_income_B": 20.0},
+                "2021": {"revenue_B": 70.0, "gross_profit_B": 40.0, "ebit_B": 18.0, "net_income_B": 15.0},
+            },
+            "margins": {
+                "gross_margin_pct": 60.0,
+                "operating_margin_pct": 30.0,
+                "net_margin_pct": 25.0,
+                "ebitda_margin_pct": 35.0,
+                "return_on_equity_pct": 40.0,
+                "return_on_assets_pct": 20.0,
+            },
+            "balance_sheet": {
+                "total_debt_B": 10.0,
+                "cash_B": 40.0,
+                "net_cash_B": 30.0,
+            },
+            "cash_flow": {
+                "operating_cash_flow_B": 35.0,
+                "free_cash_flow_B": 30.0,
+            },
+            "growth": {
+                "revenue_growth_pct": 17.6,
+                "earnings_growth_pct": 25.0,
+            },
+            "analyst": {
+                "recommendation": "buy",
+                "target_mean_price": 140.0,
+            },
+            "dividends": {
+                "dividend_yield_pct": 1.2,
+                "payout_ratio_pct": 30.5,
+            }
+        }
+
     stock = yf.Ticker(ticker)
     info = stock.info
 

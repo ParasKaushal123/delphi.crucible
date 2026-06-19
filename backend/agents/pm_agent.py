@@ -256,6 +256,17 @@ async def run_full_pipeline(
     await session_store.publish_memo_update(session_id, final_memo)
     await session_store.publish_phase_change(session_id, Phase.MEMO_DELIVERED.value,
                                              "Investment Memo delivered.", is_emergency=is_emergency)
+    
+    # Log memo to history
+    await session_store._redis.lpush(
+        "user_history:demo_user",
+        json.dumps({
+            "type": "memo",
+            "ticker": ticker.upper(),
+            "memo": final_memo,
+            "timestamp": datetime.now().isoformat()
+        })
+    )
 
     await session_store.publish_room_message(
         session_id, "main", "pm-agent",

@@ -157,6 +157,8 @@ class SessionStore:
     async def find_session_by_room(self, room_id: str) -> Optional[SessionState]:
         """Find a session that contains the given room_id (main, data_cave, or debate_ring)."""
         async for key in self._redis.scan_iter(match=f"{self.PREFIX}*"):
+            if key.endswith(":messages"):
+                continue
             raw = await self._redis.get(key)
             if raw:
                 data = json.loads(raw)
@@ -168,6 +170,8 @@ class SessionStore:
         """Get the most recent non-delivered session (for the frontend)."""
         latest = None
         async for key in self._redis.scan_iter(match=f"{self.PREFIX}*"):
+            if key.endswith(":messages"):
+                continue
             raw = await self._redis.get(key)
             if raw:
                 data = json.loads(raw)
@@ -189,7 +193,17 @@ class SessionStore:
         await self._redis.publish(self.SSE_CHANNEL, event)
 
     async def publish_room_message(self, session_id: str, room_name: str, agent: str, content: str):
-        """Publish a chat message event for the frontend room panels."""
+        """Publish a chat message event for the frontend room panels, and save it for history."""
+        msg_obj = {
+            "room": room_name,
+            "agent": agent,
+            "content": content,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+        # Save to Redis list
+        await self._redis.rpush(f"{self.PREFIX}{session_id}:messages", json.dumps(msg_obj))
+        
         await self._publish_event(session_id, "room_message", {
             "room": room_name,
             "agent": agent,

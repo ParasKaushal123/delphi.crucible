@@ -1,138 +1,67 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useCallback } from "react";
 
-interface UploadZoneProps {
-  onUploadStart: (companyName: string) => void;
+interface Props {
+  onUploadStart: (file: File) => void;
   disabled?: boolean;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-export default function UploadZone({ onUploadStart, disabled }: UploadZoneProps) {
+export default function UploadZone({ onUploadStart, disabled }: Props) {
   const [isDragging, setIsDragging] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [companyName, setCompanyName] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleFile = useCallback(
-    async (file: File) => {
-      if (!file.name.toLowerCase().endsWith(".pdf")) {
-        setError("Only PDF files are supported.");
-        return;
-      }
-      if (file.size > 50 * 1024 * 1024) {
-        setError("File too large. Maximum 50MB.");
-        return;
-      }
-
-      setError(null);
-      setIsUploading(true);
-
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("company_name", companyName.trim());
-
-      try {
-        const resp = await fetch(`${API_BASE}/api/analyze/upload`, {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!resp.ok) {
-          const err = await resp.json();
-          throw new Error(err.detail || "Upload failed");
-        }
-
-        const data = await resp.json();
-        const name = data.company_name || companyName || file.name.replace(".pdf", "");
-        setIsUploading(false);   // ← clears spinner before handing off
-        onUploadStart(name);
-      } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "Upload failed. Please try again.");
-        setIsUploading(false);
-      }
-    },
-    [companyName, onUploadStart]
-  );
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
+      if (disabled) return;
+
       const file = e.dataTransfer.files[0];
-      if (file) handleFile(file);
+      if (file && file.type === "application/pdf") {
+        import("react-hot-toast").then((module) => { module.toast.success("PDF Selected! Initiating upload..."); });
+        onUploadStart(file);
+      } else {
+        alert("Please upload a valid PDF file.");
+      }
     },
-    [handleFile]
+    [disabled, onUploadStart]
   );
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-  const handleDragLeave = () => setIsDragging(false);
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleFile(file);
-  };
-
   return (
-    <div className="upload-zone-wrapper">
-      {/* Optional company name override */}
-      <input
-        type="text"
-        className="upload-company-input"
-        placeholder="Company name (optional — we'll detect it)"
-        value={companyName}
-        onChange={(e) => setCompanyName(e.target.value)}
-        disabled={disabled || isUploading}
-        id="upload-company-name"
-      />
-
-      {/* Drop zone */}
-      <div
-        className={`upload-dropzone ${isDragging ? "dragging" : ""} ${isUploading ? "uploading" : ""}`}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onClick={() => !disabled && !isUploading && fileInputRef.current?.click()}
-        role="button"
-        aria-label="Upload 10-K PDF"
-        id="upload-dropzone"
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".pdf"
-          style={{ display: "none" }}
-          onChange={handleInputChange}
-          disabled={disabled || isUploading}
-          id="upload-file-input"
-        />
-
-        {isUploading ? (
-          <>
-            <div className="upload-spinner" />
-            <span className="upload-label">Extracting PDF text...</span>
-          </>
-        ) : isDragging ? (
-          <>
-            <span className="upload-icon">📂</span>
-            <span className="upload-label">Drop to analyze</span>
-          </>
-        ) : (
-          <>
-            <span className="upload-icon">📄</span>
-            <span className="upload-label">
-              Drop 10-K PDF here <span className="upload-or">or click to browse</span>
-            </span>
-          </>
-        )}
-      </div>
-
-      {error && <div className="upload-error">{error}</div>}
+    <div
+      className={`border border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer group
+        ${isDragging ? "border-secondary bg-secondary/10" : "border-white/20"}
+        ${disabled ? "opacity-50 cursor-not-allowed pointer-events-none" : "hover:border-secondary/50"}
+      `}
+      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+      onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+      onDrop={handleDrop}
+      onClick={() => {
+        if (disabled) return;
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = ".pdf";
+        input.onchange = (e) => {
+          const file = (e.target as HTMLInputElement).files?.[0];
+          if (file) {
+            import("react-hot-toast").then((module) => { module.toast.success("PDF Selected! Initiating upload..."); });
+            onUploadStart(file);
+          }
+        };
+        input.click();
+      }}
+    >
+      {disabled ? (
+        <svg className="animate-spin h-6 w-6 text-secondary mb-2 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      ) : (
+        <span className="material-symbols-outlined text-on-surface-variant group-hover:text-secondary mb-2 block transition-colors">upload_file</span>
+      )}
+      <span className="font-label-sm text-label-sm text-on-surface-variant group-hover:text-secondary transition-colors">
+        {disabled ? "Uploading & Processing PDF..." : isDragging ? "Drop here!" : "Drop 10-K PDF"}
+      </span>
     </div>
   );
 }

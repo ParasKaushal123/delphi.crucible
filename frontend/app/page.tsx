@@ -1,13 +1,20 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import TickerSearch from "./components/TickerSearch";
-import RoomPanel from "./components/RoomPanel";
-import DebateRing from "./components/DebateRing";
-import MemoPanel from "./components/MemoPanel";
 import UploadZone from "./components/UploadZone";
 import { useSSE } from "./hooks/useSSE";
 import { toast, Toaster } from "react-hot-toast";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import TopAppBar from "./components/TopAppBar";
+import ProfileModal from "./components/ProfileModal";
+import InvestModal from "./components/InvestModal";
+import BottomActionBar from "./components/BottomActionBar";
+import MemoPanel from "./components/MemoPanel";
+import { useWorkspace, UnifiedMessage } from "./context/WorkspaceContext";
+import { useRouter } from "next/navigation";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -18,378 +25,387 @@ interface Ticker {
   sector: string;
 }
 
-interface ChatMessage {
-  agent: string;
-  content: string;
-}
-
-type Phase =
-  | "IDLE"
-  | "DATA_CAVE_OPEN"
-  | "DATA_CAVE_COMPLETE"
-  | "DEBATE_RING_OPEN"
-  | "DEBATE_COMPLETE"
-  | "MEMO_DELIVERED"
-  | "ERROR";
-
 export default function HomePage() {
+  const router = useRouter();
   const [selectedTicker, setSelectedTicker] = useState<Ticker | null>(null);
   const [isRunning, setIsRunning] = useState(false);
-  const [phase, setPhase] = useState<Phase>("IDLE");
-  const [memo, setMemo] = useState("");
   const [inputMode, setInputMode] = useState<"ticker" | "pdf">("ticker");
 
-  // Messages for each room
-  const [mainMessages, setMainMessages] = useState<ChatMessage[]>([]);
-  const [dataCaveMessages, setDataCaveMessages] = useState<ChatMessage[]>([]);
-  const [bullMessages, setBullMessages] = useState<ChatMessage[]>([]);
-  const [bearMessages, setBearMessages] = useState<ChatMessage[]>([]);
+  const {
+    sessions,
+    activeSessionId,
+    setActiveSessionId,
+    messages,
+    setMessages,
+    phase,
+    setPhase,
+    fetchSessions,
+    loadSession
+  } = useWorkspace();
 
-  // Auto-scroll refs
-  const mainScrollRef = useRef<HTMLDivElement>(null);
-  const dataCaveScrollRef = useRef<HTMLDivElement>(null);
+  const [isInvestOpen, setIsInvestOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const feedRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll rooms on new messages
+  // Auto-scroll unified chat
   useEffect(() => {
-    const mainEl = document.getElementById("room-main-room");
-    if (mainEl) mainEl.scrollTop = mainEl.scrollHeight;
-  }, [mainMessages]);
+    if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
+  }, [messages]);
 
-  useEffect(() => {
-    const dcEl = document.getElementById("room-data-cave");
-    if (dcEl) dcEl.scrollTop = dcEl.scrollHeight;
-  }, [dataCaveMessages]);
-
-  useEffect(() => {
-    const bullEl = document.getElementById("room-debate-bull");
-    if (bullEl) bullEl.scrollTop = bullEl.scrollHeight;
-  }, [bullMessages]);
-
-  useEffect(() => {
-    const bearEl = document.getElementById("room-debate-bear");
-    if (bearEl) bearEl.scrollTop = bearEl.scrollHeight;
-  }, [bearMessages]);
-
-  // SSE event handler
-  const handleSSEEvent = useCallback(
-    (event: { session_id: string; type: string; data: Record<string, unknown> }) => {
-      const { type, data } = event;
-
-      switch (type) {
-        case "room_message": {
-          const room = data.room as string;
-          const msg: ChatMessage = {
-            agent: data.agent as string,
-            content: data.content as string,
+  // Handle live SSE updates
+  const { connected } = useSSE(
+    useCallback((event) => {
+      if (event.type === "session_created") {
+        fetchSessions();
+      }
+      
+      if (activeSessionId && event.session_id === activeSessionId) {
+        if (event.type === "phase_change") {
+          setPhase(event.data.phase as any);
+        } else if (event.type === "room_message") {
+          const newMsg: UnifiedMessage = {
+            id: event.data.message_id || Date.now().toString(),
+            agent: String(event.data.agent || event.data.agent_id || "unknown"),
+            content: String(event.data.content || ""),
+            timestamp: new Date().toISOString()
           };
-
-          if (room === "main") {
-            setMainMessages((prev) => [...prev, msg]);
-          } else if (room === "data-cave") {
-            setDataCaveMessages((prev) => [...prev, msg]);
-          } else if (room === "debate-ring") {
-            // Route to bull or bear based on agent
-            if (msg.agent === "bull-agent") {
-              setBullMessages((prev) => [...prev, msg]);
-            } else if (msg.agent === "bear-agent") {
-              setBearMessages((prev) => [...prev, msg]);
-            } else {
-              // PM messages go to both
-              setBullMessages((prev) => [...prev, msg]);
-              setBearMessages((prev) => [...prev, msg]);
-            }
-          }
-          break;
-        }
-
-        case "phase_change": {
-          const newPhase = data.phase as Phase;
-          setPhase(newPhase);
-          if (newPhase === "MEMO_DELIVERED" || newPhase === "ERROR") {
-            setIsRunning(false);
-          }
-          if (newPhase === "MEMO_DELIVERED" && data.is_emergency) {
-            toast.error("⚠️ AUTONOMOUS ALERT: NVDA position changed. Click to view.", {
-              duration: 8000,
-              style: {
-                background: '#ff4b4b',
-                color: '#fff',
-                fontWeight: 'bold',
-              },
-            });
-          }
-          break;
-        }
-
-        case "memo_update": {
-          setMemo(data.memo as string);
-          break;
+          setMessages(prev => [...prev, newMsg]);
         }
       }
-    },
-    []
+    }, [activeSessionId, setPhase, setMessages])
   );
 
-  const { connected } = useSSE(handleSSEEvent);
-
-  // Trigger analysis — Ticker mode
-  const handleGenerate = async () => {
-    if (!selectedTicker || isRunning) return;
-
-    // Reset state
+  const startAnalysis = async () => {
+    if (!selectedTicker) return;
     setIsRunning(true);
-    setPhase("IDLE");
-    setMemo("");
-    setMainMessages([]);
-    setDataCaveMessages([]);
-    setBullMessages([]);
-    setBearMessages([]);
-
     try {
-      const resp = await fetch(`${API_BASE}/api/analyze`, {
+      const res = await fetch(`${API_BASE}/api/webhook/start-pipeline`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker: selectedTicker.ticker }),
+        body: JSON.stringify({ ticker: selectedTicker.ticker })
       });
-
-      if (!resp.ok) {
-        throw new Error("Failed to start analysis");
-      }
-    } catch (e) {
+      if (!res.ok) throw new Error("Failed to start analysis");
+      const data = await res.json();
+      setActiveSessionId(data.session_id);
+      setMessages([]);
+      setPhase("DATA_CAVE_OPEN");
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
       setIsRunning(false);
-      setMainMessages([
-        {
-          agent: "pm-agent",
-          content: `Error: Failed to start analysis pipeline. Make sure the backend is running.`,
-        },
-      ]);
+    }
+  };
+
+  const startPdfAnalysis = async (file: File, companyName: string) => {
+    setIsRunning(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("company_name", companyName);
+
+      const res = await fetch(`${API_BASE}/api/analyze/upload`, {
+        method: "POST",
+        body: formData
+      });
+      if (!res.ok) throw new Error("PDF analysis failed");
+      const data = await res.json();
+      setActiveSessionId(data.session_id);
+      setMessages([]);
+      setPhase("DATA_CAVE_OPEN");
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setIsRunning(false);
     }
   };
 
   const handleSimulateCrash = async () => {
-    if (isRunning) return;
-    setIsRunning(true);
-    setPhase("IDLE");
-    setMemo("");
-    setMainMessages([]);
-    setDataCaveMessages([]);
-    setBullMessages([]);
-    setBearMessages([]);
+    if (!activeSessionId || !selectedTicker) {
+      toast.error("Please start an analysis first");
+      return;
+    }
+    toast("🚨 Simulating 5% drop!", { icon: "📉" });
     try {
-      const resp = await fetch(`${API_BASE}/api/simulate-market-tick`, {
+      await fetch(`${API_BASE}/api/webhook/simulate-crash`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: activeSessionId, ticker: selectedTicker.ticker })
       });
-      if (!resp.ok) throw new Error("Failed to simulate crash");
-    } catch (e) {
-      setIsRunning(false);
-      toast.error("Failed to trigger simulation");
+    } catch (e: any) {
+      toast.error("Crash simulation failed");
     }
   };
 
-  // Trigger analysis — PDF mode (called by UploadZone after successful upload)
-  const handleUploadStart = (companyName: string) => {
-    setIsRunning(true);
+  const handleNewChat = () => {
+    setActiveSessionId(null);
+    setMessages([]);
     setPhase("IDLE");
-    setMemo("");
-    setMainMessages([]);
-    setDataCaveMessages([]);
-    setBullMessages([]);
-    setBearMessages([]);
-    setMainMessages([
-      {
-        agent: "pm-agent",
-        content: `PDF uploaded. Analyzing **${companyName}** — watch the Data Cave for live updates.`,
-      },
-    ]);
   };
 
-  // Room status helpers
-  const getMainStatus = (): { status: "idle" | "active" | "complete"; text: string } => {
-    if (phase === "MEMO_DELIVERED") return { status: "complete", text: "Memo Delivered" };
-    if (phase !== "IDLE") return { status: "active", text: "Pipeline Active" };
-    return { status: "idle", text: "Ready" };
+  const getAgentTheme = (agentId: string) => {
+    if (!agentId) return { name: "System", icon: "settings", border: "border-white/10", bg: "bg-white/5", text: "text-gray-300", shadow: "" };
+    if (agentId.includes("pm")) return {
+      name: "Portfolio Manager",
+      icon: "account_balance",
+      border: "border-yellow-400/30",
+      bg: "bg-gradient-to-br from-yellow-400/10 to-transparent",
+      text: "text-yellow-100",
+      shadow: "shadow-[0_0_15px_rgba(250,204,21,0.1)]"
+    };
+    if (agentId.includes("bull")) return {
+      name: "Bull Agent",
+      icon: "trending_up",
+      border: "border-green-400/30",
+      bg: "bg-gradient-to-br from-green-400/10 to-transparent",
+      text: "text-green-100",
+      shadow: "shadow-[0_0_15px_rgba(74,222,128,0.1)]"
+    };
+    if (agentId.includes("bear")) return {
+      name: "Bear Agent",
+      icon: "trending_down",
+      border: "border-red-400/30",
+      bg: "bg-gradient-to-br from-red-400/10 to-transparent",
+      text: "text-red-100",
+      shadow: "shadow-[0_0_15px_rgba(248,113,113,0.1)]"
+    };
+    if (agentId.includes("quant")) return {
+      name: "Quant Analyst",
+      icon: "query_stats",
+      border: "border-blue-400/30",
+      bg: "bg-gradient-to-br from-blue-400/10 to-transparent",
+      text: "text-blue-100",
+      shadow: "shadow-[0_0_15px_rgba(96,165,250,0.1)]"
+    };
+    return {
+      name: "System",
+      icon: "smart_toy",
+      border: "border-white/10",
+      bg: "bg-white/5",
+      text: "text-gray-300",
+      shadow: ""
+    };
   };
 
-  const getDataCaveStatus = (): {
-    status: "idle" | "active" | "complete" | "waiting";
-    text: string;
-  } => {
-    if (phase === "DATA_CAVE_COMPLETE" || phase === "DEBATE_RING_OPEN" || phase === "DEBATE_COMPLETE" || phase === "MEMO_DELIVERED")
-      return { status: "complete", text: "Data Extracted" };
-    if (phase === "DATA_CAVE_OPEN") return { status: "active", text: "Quant Analyzing..." };
-    return { status: "idle", text: "Standby" };
-  };
-
-  const getDebateStatus = (): {
-    status: "idle" | "active" | "complete" | "waiting";
-    text: string;
-  } => {
-    if (phase === "DEBATE_COMPLETE" || phase === "MEMO_DELIVERED")
-      return { status: "complete", text: "Debate Concluded" };
-    if (phase === "DEBATE_RING_OPEN") return { status: "active", text: "Agents Debating..." };
-    return { status: "idle", text: "Standby" };
-  };
-
-  const mainStatus = getMainStatus();
-  const dataCaveStatus = getDataCaveStatus();
-  const debateStatus = getDebateStatus();
-
-  // Phase progress for header
-  const getPhaseLabel = (): string => {
-    switch (phase) {
-      case "DATA_CAVE_OPEN":
-        return "Phase 2: Data Cave";
-      case "DATA_CAVE_COMPLETE":
-        return "Data Synthesized";
-      case "DEBATE_RING_OPEN":
-        return "Phase 3: Debate Ring";
-      case "DEBATE_COMPLETE":
-        return "Writing Memo...";
-      case "MEMO_DELIVERED":
-        return "Memo Complete ✓";
-      default:
-        return isRunning ? "Starting..." : "Ready";
+  const parseInvestDecision = () => {
+    const pmMessages = messages.filter(m => m.agent.includes("pm"));
+    if (pmMessages.length === 0) return null;
+    const finalMemo = pmMessages[pmMessages.length - 1].content;
+    
+    const regex = /\[DECISION:\s*INVEST\s*\|\s*AMOUNT:\s*([^|]+)\s*\|\s*THRESHOLD:\s*(.+?)\]/i;
+    const investMatch = finalMemo.match(regex);
+    if (investMatch) {
+      // clean up amount to just numbers, remove $, commas, letters
+      const rawAmount = investMatch[1].replace(/[^0-9.]/g, '');
+      const parsedAmount = parseInt(rawAmount) || 1000;
+      return { invest: true, amount: parsedAmount, threshold: investMatch[2].trim() };
     }
+    const noInvestMatch = finalMemo.match(/\[DECISION:\s*DO NOT INVEST\]/i);
+    if (noInvestMatch) {
+      return { invest: false };
+    }
+    return null;
   };
+
+  const decision = phase === "MEMO_DELIVERED" ? parseInvestDecision() : null;
 
   return (
-    <div className="app-container">
-      {/* ─── Header ─── */}
-      <Toaster position="top-right" />
-      <header className="header">
-        <div className="header-brand">
-          <div className="header-logo">TDC</div>
-          <div>
-            <div className="header-title">The Delphi Crucible</div>
-            <div className="header-subtitle">Multi-Agent Investment Analysis · Band.ai</div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-transparent overflow-x-hidden text-on-surface relative">
+      <Toaster position="top-right" toastOptions={{ className: 'glass-panel text-white' }} />
+      <TopAppBar connected={connected} onProfileClick={() => setIsProfileOpen(true)} />
 
-        <div className="header-status">
-          <div className="agent-indicators" style={{ display: 'flex', gap: '12px', marginRight: '24px', alignItems: 'center' }}>
-            <span style={{ fontSize: '12px', color: '#fff', fontWeight: 500 }}>PM {connected ? '🟢' : '⚪'}</span>
-            <span style={{ fontSize: '12px', color: '#fff', fontWeight: 500 }}>Quant {connected ? '🟢' : '⚪'}</span>
-            <span style={{ fontSize: '12px', color: '#fff', fontWeight: 500 }}>Bull {connected ? '🟢' : '⚪'}</span>
-            <span style={{ fontSize: '12px', color: '#fff', fontWeight: 500 }}>Bear {connected ? '🟢' : '⚪'}</span>
-          </div>
-          <button 
-            className="simulate-crash-btn" 
-            onClick={handleSimulateCrash}
-            disabled={isRunning}
-            style={{ backgroundColor: '#ff4b4b', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', marginRight: '16px', fontWeight: 'bold' }}
-          >
-            🚨 Simulate Market Crash
-          </button>
-          <div className="status-badge">
-            <span
-              className={`status-dot ${
-                phase === "MEMO_DELIVERED"
-                  ? ""
-                  : phase === "IDLE"
-                  ? "idle"
-                  : ""
-              }`}
-            />
-            {getPhaseLabel()}
-          </div>
-          <div className="status-badge">
-            <span
-              className={`status-dot ${connected ? "" : "error"}`}
-              style={connected ? {} : { animation: "none" }}
-            />
-            {connected ? "SSE Connected" : "Connecting..."}
-          </div>
-        </div>
-      </header>
-
-      {/* ─── Ticker Bar ─── */}
-      <div className="ticker-bar">
-        {/* Mode toggle */}
-        <div className="input-mode-tabs">
-          <button
-            className={`input-mode-tab ${inputMode === "ticker" ? "active" : ""}`}
-            onClick={() => setInputMode("ticker")}
-            disabled={isRunning}
-            id="tab-ticker"
-          >
-            📈 Ticker
-          </button>
-          <button
-            className={`input-mode-tab ${inputMode === "pdf" ? "active" : ""}`}
-            onClick={() => setInputMode("pdf")}
-            disabled={isRunning}
-            id="tab-pdf"
-          >
-            📄 10-K PDF
-          </button>
-        </div>
-
-        {/* Conditional input */}
-        {inputMode === "ticker" ? (
-          <>
-            <TickerSearch
-              onSelect={setSelectedTicker}
-              onClear={() => setSelectedTicker(null)}
-              selectedTicker={selectedTicker}
-              disabled={isRunning}
-            />
-            <button
-              className={`generate-btn ${isRunning ? "running" : ""}`}
-              onClick={handleGenerate}
-              disabled={!selectedTicker || isRunning}
-              id="generate-memo-btn"
-            >
-              {isRunning ? (
-                <>
-                  <span className="upload-spinner" style={{ width: 14, height: 14, borderTopColor: "white" }} />
-                  Analyzing...
-                </>
-              ) : (
-                <>🚀 Generate Memo</>
-              )}
+      <main className="flex flex-col items-center pt-28 px-8 w-full min-h-screen z-10 relative">
+        {/* Outer Floating Glass Window */}
+        <div className="w-full max-w-[1200px] h-[750px] flex glass-window rounded-3xl overflow-hidden shadow-2xl relative border border-white/10 mb-8">
+          
+          {/* LEFT PANEL: Chat Sidebar */}
+          <div className="hidden lg:flex w-64 shrink-0 border-r border-white/5 flex-col gap-4 bg-black/40 backdrop-blur-md z-10 p-4">
+            <button onClick={handleNewChat} className="primary-btn w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-white/10 hover:bg-white/10 transition-colors bg-white/5">
+              <span className="material-symbols-outlined text-sm">add</span>
+              New Analysis
             </button>
-          </>
-        ) : (
-          <UploadZone
-            onUploadStart={handleUploadStart}
-            disabled={isRunning}
-          />
-        )}
-      </div>
+            <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-2 custom-scrollbar">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-secondary mt-2 pl-2">Previous Chats</span>
+              {sessions.map(s => (
+                <div 
+                  key={s.session_id} 
+                  onClick={() => loadSession(s.session_id)}
+                  className={`p-3 rounded-xl cursor-pointer transition-colors text-sm truncate ${activeSessionId === s.session_id ? 'bg-white/10 border border-white/20 text-[#f2b98b]' : 'hover:bg-white/5 text-white/70'}`}
+                >
+                  <div className="font-bold truncate">{s.company_name || s.ticker}</div>
+                  <div className="text-[10px] opacity-50 font-serif mt-1">{new Date(s.created_at).toLocaleDateString()}</div>
+                </div>
+              ))}
+            </div>
+          </div>
 
-      {/* ─── War Room (3-column) ─── */}
-      <div className="war-room">
-        {/* Column 1: Main Room */}
-        <RoomPanel
-          roomName="Main Room"
-          roomIcon="🏛️"
-          roomClass="main-room"
-          messages={mainMessages}
-          status={mainStatus.status}
-          statusText={mainStatus.text}
-        />
+          {/* MIDDLE PANEL: Unified Chat/Input */}
+          <div className="flex-1 flex flex-col z-10 relative bg-transparent h-full min-w-0">
+            {!activeSessionId ? (
+              // NEW CHAT INPUT
+              <div className="w-full h-full flex flex-col justify-center items-center p-4">
+                <div className="w-[500px] max-w-full flex flex-col gap-8">
+                  <div className="text-center w-full">
+                  <span className="material-symbols-outlined text-6xl text-white/10 mb-4 block">analytics</span>
+                  <h2 className="text-2xl md:text-3xl font-display-xl uppercase tracking-widest text-white mb-2 whitespace-nowrap">Start Analysis</h2>
+                  <p className="text-secondary font-serif text-sm">Select a ticker or upload a 10-K PDF to initiate a new AI debate.</p>
+                </div>
+                <div className="flex gap-4 justify-center">
+                  <button onClick={() => setInputMode("ticker")} className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${inputMode === "ticker" ? "bg-[#f2b98b] text-black shadow-[0_0_15px_rgba(242,185,139,0.3)]" : "glass-panel"}`}>Ticker</button>
+                  <button onClick={() => setInputMode("pdf")} className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${inputMode === "pdf" ? "bg-[#f2b98b] text-black shadow-[0_0_15px_rgba(242,185,139,0.3)]" : "glass-panel"}`}>10-K PDF</button>
+                </div>
+                {inputMode === "ticker" && (
+                  <div className="glass-panel p-4 md:p-8 rounded-2xl flex flex-col gap-6 w-full">
+                    <TickerSearch onSelect={(val) => setSelectedTicker(val as any)} />
+                    {selectedTicker && (
+                      <button onClick={startAnalysis} disabled={isRunning} className="primary-btn w-full py-4 text-sm font-bold shadow-[0_0_15px_rgba(242,185,139,0.2)] hover:shadow-[0_0_25px_rgba(242,185,139,0.4)]">
+                        {isRunning ? "Starting Engine..." : `Analyze ${selectedTicker.ticker}`}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {inputMode === "pdf" && (
+                  <UploadZone onUploadStart={(file) => startPdfAnalysis(file, file.name.replace(".pdf", ""))} disabled={isRunning} />
+                )}
+                </div>
+              </div>
+            ) : (
+              // CHAT INTERFACE
+              <div className="w-full flex-1 flex flex-col h-full overflow-hidden">
+                <div className="p-4 border-b border-white/5 bg-black/20 backdrop-blur-md flex justify-between items-center shrink-0">
+                  <h2 className="font-display-xl tracking-widest text-white uppercase text-sm">Debate Room</h2>
+                  <span className="text-[10px] font-bold px-3 py-1 bg-white/10 text-secondary rounded-full uppercase tracking-wider">{phase}</span>
+                </div>
+                
+                <div ref={feedRef} className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col gap-6 custom-scrollbar pb-20">
+                  <AnimatePresence>
+                    {messages.map((m, i) => {
+                      const theme = getAgentTheme(m.agent);
+                      return (
+                        <motion.div 
+                          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                          key={i} 
+                          className={`flex flex-col gap-2 w-full max-w-[95%] md:max-w-[90%] ${m.agent.includes("pm") ? "mx-auto w-full max-w-full" : (i % 2 === 0 ? "self-start" : "self-end")}`}
+                        >
+                          <div className={`flex items-center gap-2 ${m.agent.includes("pm") ? "justify-center" : (i % 2 === 0 ? "ml-2" : "flex-row-reverse mr-2")}`}>
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center ${theme.bg} ${theme.border} border shadow-lg`}>
+                              <span className={`material-symbols-outlined text-[12px] ${theme.text}`}>{theme.icon}</span>
+                            </div>
+                            <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.text} opacity-90 drop-shadow-sm`}>{theme.name}</span>
+                          </div>
+                          <div className={`p-4 md:p-5 rounded-3xl border ${theme.border} ${theme.bg} ${theme.shadow} backdrop-blur-md text-[13px] leading-relaxed prose prose-invert max-w-none text-white/90 relative group transition-all duration-300 hover:border-white/30`}>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                            <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-3xl pointer-events-none" />
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
 
-        {/* Column 2: Data Cave */}
-        <RoomPanel
-          roomName="Data Cave"
-          roomIcon="⚗️"
-          roomClass="data-cave"
-          messages={dataCaveMessages}
-          status={dataCaveStatus.status}
-          statusText={dataCaveStatus.text}
-        />
+                  {/* POST-CHAT DECISION BUTTON */}
+                  {decision && (
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-8 mb-4 w-full max-w-[600px] mx-auto flex flex-col items-center gap-6 p-6 md:p-8 glass-panel rounded-3xl border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)] relative overflow-hidden shrink-0">
+                      <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
+                      <h3 className="text-xl font-display-xl tracking-widest uppercase text-white text-center z-10">Analysis Complete</h3>
+                      
+                      {decision.invest === true && (
+                        <div className="flex flex-col items-center gap-6 w-full z-10">
+                          <p className="text-secondary font-serif text-center">The PM has recommended a <span className="text-green-400 font-bold">BUY</span>.</p>
+                          <div className="flex flex-col sm:flex-row gap-4 text-sm w-full justify-center">
+                            <div className="px-6 py-3 rounded-xl bg-black/60 border border-white/10 shadow-inner flex flex-col items-center gap-1">
+                              <span className="text-[10px] uppercase tracking-widest text-secondary font-bold">Amount</span>
+                              <span className="text-white font-bold text-lg">${decision.amount}</span>
+                            </div>
+                            <div className="px-6 py-3 rounded-xl bg-black/60 border border-white/10 shadow-inner flex flex-col items-center gap-1">
+                              <span className="text-[10px] uppercase tracking-widest text-secondary font-bold">Threshold</span>
+                              <span className="text-white font-bold text-lg">{decision.threshold}</span>
+                            </div>
+                          </div>
+                          <button onClick={() => setIsInvestOpen(true)} className="w-full sm:w-auto px-10 py-4 bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-300 border border-green-500/50 rounded-2xl hover:from-green-500/30 hover:to-emerald-500/30 transition-all font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:shadow-[0_0_30px_rgba(34,197,94,0.5)] transform hover:-translate-y-1">
+                            <span className="material-symbols-outlined">payments</span>
+                            Invest Now
+                          </button>
+                        </div>
+                      )}
 
-        {/* Column 3: Debate Ring (split Bull/Bear) */}
-        <DebateRing
-          bullMessages={bullMessages}
-          bearMessages={bearMessages}
-          status={debateStatus.status}
-          statusText={debateStatus.text}
-        />
-      </div>
+                      {decision.invest === false && (
+                        <div className="flex flex-col items-center gap-6 w-full z-10">
+                          <p className="text-secondary font-serif text-center">The PM has recommended <span className="text-red-400 font-bold">DO NOT INVEST</span>.</p>
+                          <button disabled className="w-full sm:w-auto px-10 py-4 bg-red-500/10 text-red-400 border border-red-500/30 rounded-2xl font-bold uppercase tracking-widest flex items-center justify-center gap-2 cursor-not-allowed">
+                            <span className="material-symbols-outlined">block</span>
+                            Do Not Invest
+                          </button>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                  {messages.length === 0 && <div className="m-auto text-center"><span className="material-symbols-outlined text-4xl opacity-20 block mb-2">hourglass_empty</span><p className="opacity-50 text-sm font-serif">Waiting for agents...</p></div>}
+                </div>
+              </div>
+            )}
+          </div>
 
-      {/* ─── Memo Strip (bottom) ─── */}
-      <MemoPanel memo={memo} isVisible={phase === "MEMO_DELIVERED"} />
+          {/* RIGHT PANEL: Agents & Status */}
+          <div className="hidden md:flex w-64 shrink-0 border-l border-white/5 flex-col gap-8 bg-black/40 backdrop-blur-md z-10 p-6">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-secondary block mb-4 border-b border-white/10 pb-2">Active Agents</span>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-yellow-400/20 shadow-inner">
+                   <span className="material-symbols-outlined text-yellow-300 text-lg">account_balance</span>
+                   <span className="text-xs font-bold text-yellow-100 uppercase tracking-wider">PM Agent</span>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-green-400/20 shadow-inner">
+                   <span className="material-symbols-outlined text-green-300 text-lg">trending_up</span>
+                   <span className="text-xs font-bold text-green-100 uppercase tracking-wider">Bull Agent</span>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-red-400/20 shadow-inner">
+                   <span className="material-symbols-outlined text-red-300 text-lg">trending_down</span>
+                   <span className="text-xs font-bold text-red-100 uppercase tracking-wider">Bear Agent</span>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-blue-400/20 shadow-inner">
+                   <span className="material-symbols-outlined text-blue-300 text-lg">query_stats</span>
+                   <span className="text-xs font-bold text-blue-100 uppercase tracking-wider">Quant Agent</span>
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-secondary block mb-4 border-b border-white/10 pb-2">Pipeline Status</span>
+              <div className="flex flex-col gap-3 text-xs border-l-2 border-white/10 ml-2 pl-4">
+                <div className={`transition-all duration-300 ${phase === 'IDLE' ? 'text-[#f2b98b] font-bold scale-105 origin-left' : 'text-secondary'}`}>1. Idle</div>
+                <div className={`transition-all duration-300 ${phase.includes('DATA_CAVE') ? 'text-[#f2b98b] font-bold scale-105 origin-left' : 'text-secondary'}`}>2. Data Extraction</div>
+                <div className={`transition-all duration-300 ${phase.includes('DEBATE') ? 'text-[#f2b98b] font-bold scale-105 origin-left' : 'text-secondary'}`}>3. Agent Debate</div>
+                <div className={`transition-all duration-300 ${phase === 'MEMO_DELIVERED' ? 'text-green-400 font-bold scale-105 origin-left' : 'text-secondary'}`}>4. Memo Delivered</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Memo Panel rendered beneath the workspace window */}
+        <div className="w-full max-w-[1200px] mb-32">
+          <MemoPanel memo={messages.filter(m => m.agent.includes("pm")).pop()?.content || ""} isVisible={phase === "MEMO_DELIVERED"} />
+        </div>
+      </main>
+
+      <BottomActionBar 
+        connected={connected}
+        onSimulateCrash={handleSimulateCrash}
+        onGenerateMemo={startAnalysis}
+        onInvest={() => setIsInvestOpen(true)}
+        isSimulating={isRunning}
+        isGenerating={isRunning}
+        hasActiveSession={!!activeSessionId}
+      />
+      <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
+      <InvestModal 
+        isOpen={isInvestOpen} 
+        onClose={() => setIsInvestOpen(false)} 
+        initialTicker={selectedTicker?.ticker || ""} 
+        initialAmount={decision?.amount || 1000} 
+        initialThreshold={decision?.threshold || ""} 
+      />
     </div>
   );
 }
