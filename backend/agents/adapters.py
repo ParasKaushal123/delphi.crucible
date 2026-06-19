@@ -128,10 +128,15 @@ class PMAgentAdapter(BaseBenchAdapter):
                     final_memo = f"[System]: Acknowledged. Standing by. (Error: {e})"
                 
                 session.final_memo = final_memo
+                session.phase = Phase.MEMO_DELIVERED
                 await self.store.update_session(session)
-                
                 await self.store.publish_memo_update(session.session_id, final_memo)
                 await self.store.publish_phase_change(session.session_id, Phase.MEMO_DELIVERED.value, "Investment Memo delivered.", is_emergency=session.is_emergency)
+                
+                # Clear the emergency lock so the monitor can trigger again in the future
+                curr = await self.store._redis.get("current_session_id")
+                if curr and curr == session.session_id:
+                    await self.store._redis.delete("current_session_id")
                 
                 await self.store.publish_room_message(session.session_id, "main", "pm-agent", f"📄 **Investment Memo Delivered.**\n\n{final_memo}")
                 
