@@ -5,7 +5,7 @@ fastapi==0.115.12
 uvicorn[standard]==0.34.3
 
 # Financial data
-yfinance==0.2.54
+yahooquery==2.4.1
 
 # Redis / Data
 redis>=5.0.0
