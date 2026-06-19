@@ -29,7 +29,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="antialiased min-h-screen text-on-surface bg-[#1d1d1f] relative overflow-hidden">
+      <body className="antialiased min-h-screen text-on-surface bg-[#1d1d1f] relative overflow-x-hidden">
         <NgrokBypass />
         {/* Background Gradients & Noise */}
         <AnimatedBackground />
