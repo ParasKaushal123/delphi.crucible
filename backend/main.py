@@ -115,18 +115,29 @@ async def lifespan(app: FastAPI):
                         active = await session_store._redis.get("current_session_id")
                         if active: continue
                                 
-                        pos = profile.portfolio[t]
+                        if t in profile.portfolio:
+                            pos = profile.portfolio[t]
+                            threshold_str = pos.threshold
+                            buy_price = pos.buy_price
+                            shares = pos.shares
+                        elif t == "MOCK":
+                            # Fallback if MOCK was accidentally removed from user's portfolio
+                            threshold_str = "10.00"
+                            buy_price = 100.00
+                            shares = 100
+                        else:
+                            continue
                         
-                        threshold_str = pos.threshold.replace("$", "").replace("±", "").replace("+", "").replace("-", "").strip()
+                        threshold_str = threshold_str.replace("$", "").replace("±", "").replace("+", "").replace("-", "").strip()
                         try:
                             deviation = float(threshold_str)
                         except:
-                            print(f"[DEBUG] Failed to parse threshold for {t}: {pos.threshold}")
+                            print(f"[DEBUG] Failed to parse threshold for {t}: {threshold_str}")
                             continue
                                 
                         trigger = False
-                        upper_threshold = pos.buy_price + deviation
-                        lower_threshold = pos.buy_price - deviation
+                        upper_threshold = buy_price + deviation
+                        lower_threshold = buy_price - deviation
                         
                         if current_price >= upper_threshold:
                             trigger = True
@@ -189,7 +200,7 @@ async def lifespan(app: FastAPI):
                                         "type": "transaction", 
                                         "action": "ALERT", 
                                         "ticker": t,
-                                        "shares": pos.shares,
+                                        "shares": shares,
                                         "price": current_price,
                                         "timestamp": datetime.datetime.now().isoformat()
                                     })
