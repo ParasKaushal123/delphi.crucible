@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { fetchEventSource } from "@microsoft/fetch-event-source";
 
 interface SSEEvent {
   session_id: string;
@@ -15,46 +16,62 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export function useSSE(onEvent: SSECallback) {
   const [connected, setConnected] = useState(false);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
   const callbackRef = useRef<SSECallback>(onEvent);
 
-  // Keep callback ref up to date
   useEffect(() => {
     callbackRef.current = onEvent;
   }, [onEvent]);
 
   useEffect(() => {
-    const connect = () => {
-      const es = new EventSource(`${API_BASE}/api/sse/events`);
+    controllerRef.current = new AbortController();
 
-      es.onopen = () => {
-        setConnected(true);
-      };
-
-      es.addEventListener("update", (event) => {
-        try {
-          const parsed: SSEEvent = JSON.parse(event.data);
-          callbackRef.current(parsed);
-        } catch (e) {
-          console.error("Failed to parse SSE event:", e);
-        }
-      });
-
-      es.onerror = () => {
+    const connect = async () => {
+      try {
+        await fetchEventSource(`${API_BASE}/api/sse/events`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'text/event-stream',
+            'ngrok-skip-browser-warning': '69420'
+          },
+          signal: controllerRef.current?.signal,
+          onopen: async (res) => {
+            if (res.ok && res.status === 200) {
+              setConnected(true);
+            } else {
+              setConnected(false);
+            }
+          },
+          onmessage: (event) => {
+            if (event.event === "update" || event.data) {
+              try {
+                const parsed: SSEEvent = JSON.parse(event.data);
+                callbackRef.current(parsed);
+              } catch (e) {
+                console.error("Failed to parse SSE event:", e);
+              }
+            }
+          },
+          onclose: () => {
+            setConnected(false);
+            throw new Error("Connection closed by server"); // forces retry
+          },
+          onerror: (err) => {
+            setConnected(false);
+            console.error("SSE Error:", err);
+            return 3000; // retry after 3 seconds
+          }
+        });
+      } catch (err) {
         setConnected(false);
-        es.close();
-        // Reconnect after 3 seconds
-        setTimeout(connect, 3000);
-      };
-
-      eventSourceRef.current = es;
+      }
     };
 
     connect();
 
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
+      if (controllerRef.current) {
+        controllerRef.current.abort();
       }
     };
   }, []);
