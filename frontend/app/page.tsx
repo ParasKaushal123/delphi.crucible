@@ -229,7 +229,7 @@ export default function HomePage() {
                 <button onClick={async () => {
                   if (confirm("Clear all chat history?")) {
                     await fetch(`${API_BASE}/api/sessions`, { method: 'DELETE' });
-                    setSessions([]);
+                    fetchSessions();
                     setActiveSessionId(null);
                   }
                 }} className="text-[10px] text-white/40 hover:text-red-400 transition-colors uppercase tracking-wider">
