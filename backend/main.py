@@ -116,16 +116,16 @@ async def lifespan(app: FastAPI):
                         active = await session_store._redis.get("current_session_id")
                         if active: continue
                                 
-                        if t in profile.portfolio:
+                        if t == "MOCK":
+                            # Always force MOCK to use the demo baseline so alerts work even if sold
+                            threshold_str = "10.00"
+                            buy_price = 100.00
+                            shares = 100
+                        elif t in profile.portfolio:
                             pos = profile.portfolio[t]
                             threshold_str = pos.threshold
                             buy_price = pos.buy_price
                             shares = pos.shares
-                        elif t == "MOCK":
-                            # Fallback if MOCK was accidentally removed from user's portfolio
-                            threshold_str = "10.00"
-                            buy_price = 100.00
-                            shares = 100
                         else:
                             continue
                         
@@ -146,6 +146,12 @@ async def lifespan(app: FastAPI):
                             trigger = True
                             
                         if trigger:
+                            # Check if we recently alerted for this ticker (5 minute cooldown)
+                            cooldown = await session_store._redis.get(f"alert_cooldown:{t}")
+                            if cooldown:
+                                continue
+                            await session_store._redis.setex(f"alert_cooldown:{t}", 300, "1")
+                            
                             import datetime
                             from band_api.client import get_pm_client
                             from config import settings
