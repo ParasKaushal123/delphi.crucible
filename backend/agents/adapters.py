@@ -129,7 +129,7 @@ class PMAgentAdapter(BaseBenchAdapter):
                 await self.store.publish_room_message(session.session_id, "main", "pm-agent", f"📄 **Investment Memo Delivered.**\n\n{final_memo}")
                 
                 # Post preview to Main Room
-                await tools.send_message(f"Final Memo Delivered:\n{final_memo[:1000]}...", mentions=["@paras.kaushal.work/manager"])
+                await tools.send_message(f"Final Memo Delivered:\n{final_memo[:1000]}...")
 
 
 class QuantAgentAdapter(BaseBenchAdapter):

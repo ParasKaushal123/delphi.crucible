@@ -79,7 +79,7 @@ export default function HomePage() {
     if (!selectedTicker) return;
     setIsRunning(true);
     try {
-      const res = await fetch(`${API_BASE}/api/webhook/start-pipeline`, {
+      const res = await fetch(`${API_BASE}/api/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticker: selectedTicker.ticker })
