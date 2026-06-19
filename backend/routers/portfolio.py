@@ -31,6 +31,15 @@ async def get_portfolio(request: Request):
             current_prices = {}
             async with httpx.AsyncClient() as client:
                 async def fetch_price(t):
+                    if t.upper() == "MOCK":
+                        import time
+                        cycle = 420
+                        elapsed = time.time() % cycle
+                        if elapsed < 210:
+                            current_price = 70.0 + (50.0 * (elapsed / 210.0))
+                        else:
+                            current_price = 120.0 - (50.0 * ((elapsed - 210) / 210.0))
+                        return t, round(current_price, 2)
                     try:
                         res = await client.get(f"https://query2.finance.yahoo.com/v8/finance/chart/{t}", headers={'User-Agent': 'Mozilla/5.0'}, timeout=10.0)
                         if res.status_code == 200:
