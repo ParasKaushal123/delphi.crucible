@@ -19,39 +19,22 @@ RETRY_WAIT_SECONDS = 15  # flat 15-second wait on every rate limit hit
 def fetch_financial_data(ticker: str) -> dict:
     """
     Fetches a comprehensive financial dataset for a given stock ticker.
-    Retries every 15 seconds on Yahoo Finance rate limit (429) errors.
-
-    Args:
-        ticker: Stock ticker symbol (e.g., "AAPL", "MSFT")
-
-    Returns:
-        dict with 9 sections: profile, valuation, income_statement,
-        margins, balance_sheet, cash_flow, growth, analyst, dividends
+    If Yahoo Finance throws a rate limit error, it instantly falls back to 
+    simulated data to prevent the hackathon demo from hanging.
     """
-    last_error = None
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            return _fetch(ticker)
-        except Exception as e:
-            last_error = e
-            err_str = str(e).lower()
-            is_rate_limit = (
-                "too many requests" in err_str
-                or "rate limit" in err_str
-                or "429" in err_str
-            )
-            if is_rate_limit and attempt < MAX_RETRIES:
-                print(
-                    f"[RETRY {attempt}/{MAX_RETRIES}] Yahoo Finance rate limited for "
-                    f"{ticker}. Waiting {RETRY_WAIT_SECONDS}s before retry..."
-                )
-                time.sleep(RETRY_WAIT_SECONDS)
-            else:
-                raise  # Non-rate-limit error or final attempt — bubble up
-
-    raise Exception(
-        f"Failed to fetch data for {ticker} after {MAX_RETRIES} attempts: {last_error}"
-    )
+    try:
+        return _fetch(ticker)
+    except Exception as e:
+        print(f"⚠️ [Quant Agent] Yahoo Finance failed for {ticker}: {e}")
+        print(f"⚠️ [Quant Agent] Falling back to instant simulated data for {ticker} to keep demo running!")
+        
+        # Graceful fallback to mock data so the agents can still debate!
+        mock_data = _fetch("MOCK")
+        mock_data["profile"]["ticker"] = ticker.upper()
+        mock_data["profile"]["name"] = f"{ticker.upper()} Corporation"
+        mock_data["profile"]["description"] = f"(SIMULATED DATA) Due to Yahoo Finance API rate limits, this is a simulated financial profile for {ticker.upper()} to keep the pipeline running smoothly."
+        
+        return mock_data
 
 
 def _fetch(ticker: str) -> dict:
