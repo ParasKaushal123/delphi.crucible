@@ -30,8 +30,8 @@ def fetch_financial_data(ticker: str) -> dict:
 
 def _fetch(ticker: str) -> dict:
     if ticker.upper() == "MOCK":
-        # Alternate current_price between 120 and 70 every 30 seconds
-        is_high = (int(time.time() / 30) % 2) == 0
+        # Alternate current_price between 120 and 70 every 10 minutes (600 seconds)
+        is_high = (int(time.time() / 600) % 2) == 0
         current_price = 120.0 if is_high else 70.0
 
         return {
