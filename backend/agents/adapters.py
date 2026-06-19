@@ -110,9 +110,9 @@ class PMAgentAdapter(BaseBenchAdapter):
                     user_profile_data = json.loads(raw_profile)
                 else:
                     user_profile_data = {
-                        "capital": 250000.00,
-                        "risk_tolerance": "Aggressive",
-                        "portfolio": "Mostly tech equities and cash"
+                        "capital": 100000.00,
+                        "risk_tolerance": "Moderate",
+                        "portfolio": "Diversified index funds and cash"
                     }
                 
                 try:
