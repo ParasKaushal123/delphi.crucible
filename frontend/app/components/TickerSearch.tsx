@@ -22,8 +22,8 @@ const COMMON_TICKERS: Ticker[] = [
 
 interface Props {
   onSelect: (ticker: Ticker) => void;
-  onClear: () => void;
-  selectedTicker: Ticker | null;
+  onClear?: () => void;
+  selectedTicker?: Ticker | null;
   disabled?: boolean;
 }
 
