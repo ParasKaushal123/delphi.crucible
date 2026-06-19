@@ -224,7 +224,18 @@ export default function HomePage() {
               New Analysis
             </button>
             <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-2 custom-scrollbar">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-secondary mt-2 pl-2">Previous Chats</span>
+              <div className="flex justify-between items-center mt-2 px-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-secondary">Previous Chats</span>
+                <button onClick={async () => {
+                  if (confirm("Clear all chat history?")) {
+                    await fetch(`${API_BASE}/api/sessions`, { method: 'DELETE' });
+                    setSessions([]);
+                    setActiveSessionId(null);
+                  }
+                }} className="text-[10px] text-white/40 hover:text-red-400 transition-colors uppercase tracking-wider">
+                  Clear
+                </button>
+              </div>
               {sessions.map(s => (
                 <div 
                   key={s.session_id} 

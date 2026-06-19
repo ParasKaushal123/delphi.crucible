@@ -48,3 +48,14 @@ async def get_session_messages(session_id: str, request: Request):
             pass
             
     return {"session": session.to_dict(), "messages": messages}
+
+@router.delete("")
+async def clear_all_sessions(request: Request):
+    """Clear all saved chat sessions from Redis."""
+    store = request.app.state.session_store
+    keys_to_delete = []
+    async for key in store._redis.scan_iter(match=f"{store.PREFIX}*"):
+        keys_to_delete.append(key)
+    if keys_to_delete:
+        await store._redis.delete(*keys_to_delete)
+    return {"status": "ok", "deleted": len(keys_to_delete)}
