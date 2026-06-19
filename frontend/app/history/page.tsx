@@ -7,7 +7,8 @@ export default function HistoryPage() {
   const [history, setHistory] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/history")
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    fetch(`${API_BASE}/api/history`)
       .then(res => res.json())
       .then(data => setHistory(data.history || []))
       .catch(console.error);

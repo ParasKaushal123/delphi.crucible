@@ -12,8 +12,9 @@ export type Phase =
   | "ERROR";
 
 export interface UnifiedMessage {
+  id?: string;
   agent: string;
-  room: string;
+  room?: string;
   content: string;
   timestamp: string;
 }

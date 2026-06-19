@@ -10,28 +10,31 @@ export default function PortfolioPage() {
   const [history, setHistory] = useState<any[]>([]);
   const [timeRange, setTimeRange] = useState<string>("1mo");
 
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
   useEffect(() => {
-    fetch("http://localhost:8000/api/portfolio")
+    fetch(`${API_BASE}/api/portfolio`)
       .then(res => res.json())
       .then(resData => setData(resData))
       .catch(console.error);
 
-    fetch("http://localhost:8000/api/portfolio/history")
+    fetch(`${API_BASE}/api/portfolio/history`)
       .then(res => res.json())
       .then(resData => setHistory(resData.history || []))
       .catch(console.error);
   }, []);
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/portfolio/chart?range=${timeRange}`)
+    fetch(`${API_BASE}/api/portfolio/chart?range=${timeRange}`)
       .then(res => res.json())
       .then(resData => setChartData(resData.chart || []))
       .catch(console.error);
 
     // Refresh individual charts if they exist
     if (data?.portfolio) {
-      data.portfolio.forEach((pos: any) => {
-        fetch(`http://localhost:8000/api/portfolio/stock-chart/${pos.ticker}?range=${timeRange}`)
+      Object.keys(data.portfolio).forEach((ticker: string) => {
+        const pos = data.portfolio[ticker];
+        fetch(`${API_BASE}/api/portfolio/stock-chart/${pos.ticker}?range=${timeRange}`)
           .then(res => res.json())
           .then(resData => {
             setIndividualCharts(prev => ({...prev, [pos.ticker]: resData.chart || []}));
@@ -43,7 +46,7 @@ export default function PortfolioPage() {
 
   const handleSell = async (ticker: string) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/portfolio/remove`, {
+      const res = await fetch(`${API_BASE}/api/portfolio/remove`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticker })
