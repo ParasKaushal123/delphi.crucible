@@ -53,9 +53,10 @@ async def run_quant_analysis(
         }
 
     # ── TICKER MODE (yfinance) ─────────────────────────────────
+    import asyncio
     from tools.yfinance_tool import fetch_financial_data  # lazy import — avoids slow startup
 
-    raw_data = fetch_financial_data(ticker)
+    raw_data = await asyncio.to_thread(fetch_financial_data, ticker)
     raw_json = json.dumps(raw_data, indent=2, default=str)
 
     formatted_report = await call_llm(
