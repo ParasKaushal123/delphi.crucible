@@ -89,7 +89,8 @@ async def lifespan(app: FastAPI):
                 profile = UserProfile.model_validate_json(data)
                 
                 tickers_to_check = [t for t, p in profile.portfolio.items() if p.shares > 0 and p.threshold]
-                if not tickers_to_check: continue
+                if "MOCK" not in tickers_to_check:
+                    tickers_to_check.append("MOCK")
                 
                 async with httpx.AsyncClient() as client:
                     for t in tickers_to_check:
