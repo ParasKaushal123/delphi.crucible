@@ -13,6 +13,7 @@ from routers import webhook, health, tickers, sse, upload, profile, portfolio, h
 from band import Agent
 from agents.adapters import PMAgentAdapter, QuantAgentAdapter, BullAgentAdapter, BearAgentAdapter
 import asyncio
+import json
 
 MOCK_USER_ID = "demo_user"
 
