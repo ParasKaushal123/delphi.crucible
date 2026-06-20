@@ -25,5 +25,8 @@ python-dotenv>=1.1.0
 # Data handling
 pandas==2.2.3
 
+# AI APIs
+openai>=1.0.0
+
 # CORS
 # (included in fastapi/starlette)
