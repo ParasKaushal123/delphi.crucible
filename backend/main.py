@@ -29,6 +29,7 @@ async def lifespan(app: FastAPI):
     await store._redis.delete("current_session_id")
     async for key in store._redis.scan_iter("alert_cooldown:*"):
         await store._redis.delete(key)
+    await store._redis.set("active_sse_connections", "0")
         
     # Seed mock user if not exists
     existing = await store._redis.get(f"user_profile:{MOCK_USER_ID}")
@@ -88,6 +89,13 @@ async def lifespan(app: FastAPI):
         while True:
             try:
                 await asyncio.sleep(30)
+                
+                # Check if anyone is actually using the app (active SSE connections)
+                active_users = await session_store._redis.get("active_sse_connections")
+                if not active_users or int(active_users) <= 0:
+                    await asyncio.sleep(30)
+                    continue
+
                 data = await session_store._redis.get(f"user_profile:{MOCK_USER_ID}")
                 if not data: continue
                 

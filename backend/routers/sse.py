@@ -25,6 +25,7 @@ async def event_generator(request: Request):
     await pubsub.subscribe(SessionStore.SSE_CHANNEL)
 
     try:
+        await redis_client.incr("active_sse_connections")
         while True:
             # Check if client disconnected
             if await request.is_disconnected():
@@ -43,6 +44,7 @@ async def event_generator(request: Request):
 
             await asyncio.sleep(0.1)
     finally:
+        await redis_client.decr("active_sse_connections")
         await pubsub.unsubscribe(SessionStore.SSE_CHANNEL)
         await redis_client.close()
 
