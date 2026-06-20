@@ -25,6 +25,11 @@ async def lifespan(app: FastAPI):
     app.state.session_store = store
     print(f"[OK] Redis connected at {settings.REDIS_URL}")
     
+    # Clear any stale locks or cooldowns from previous hard crashes
+    await store._redis.delete("current_session_id")
+    async for key in store._redis.scan_iter("alert_cooldown:*"):
+        await store._redis.delete(key)
+        
     # Seed mock user if not exists
     existing = await store._redis.get(f"user_profile:{MOCK_USER_ID}")
     if not existing:
