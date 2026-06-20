@@ -3,6 +3,7 @@
 # Web framework
 fastapi==0.115.12
 uvicorn[standard]==0.34.3
+python-multipart>=0.0.18
 
 # Financial data
 yahooquery==2.4.1
