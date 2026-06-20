@@ -28,5 +28,8 @@ pandas==2.2.3
 # AI APIs
 openai>=1.0.0
 
+# PDF Parsing
+pdfplumber>=0.10.0
+
 # CORS
 # (included in fastapi/starlette)
